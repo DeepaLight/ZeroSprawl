@@ -166,5 +166,7 @@ where AI agents act as co-pilots for MSPs, reducing workload and boosting defens
 
 For demo requests, technical questions, or collaboration:  
 🔗 *https://www.linkedin.com/in/deepa-m-45a552166?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3BjXWepbqtTNKls3LFot0x%2FQ%3D%3D*
+    *https://www.linkedin.com/in/harishks29?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3B5z83Vz%2FOQsKt7y1RXvbIIQ%3D%3D*
+    *https://www.linkedin.com/in/logeshpalani33?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3BWPGR6Wx9SWW5eq4r1lLoSg%3D%3D*
 
 ---
