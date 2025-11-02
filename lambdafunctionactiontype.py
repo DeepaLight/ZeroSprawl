@@ -11,10 +11,9 @@ logger.setLevel(logging.INFO)
 # Environment variables for your AWS resources
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 DYNAMO_TABLE_NAME = os.environ.get("DDB_TABLE")
-# Default to a capable Claude 3 model for complex reasoning and JSON output
 # IMPORTANT: The actual model used will be determined by the BEDROCK_MODEL_ID environment variable
-# if it's set. Otherwise, it defaults to Claude 3 Sonnet.
-MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+# if it's set. Otherwise, it defaults to Amazon Nova Lite.
+MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0")
 REGION = os.environ.get("REGION", "us-east-2")
 
 # Initialize AWS clients
@@ -26,9 +25,9 @@ def lambda_handler(event, context):
     # Log the MODEL_ID being used for debugging. This will appear in your Lambda logs.
     logger.info(f"Using Bedrock Model ID: {MODEL_ID}")
 
-    ALERT_FILE = "Alert.txt"
+    ALERT_FILE = "alerts_sample.txt"
 
-    # Important: In a Lambda environment, 'alerts.txt' needs to be part of your deployment package.
+    # Important: In a Lambda environment, 'alerts_sample.txt' needs to be part of your deployment package.
     # For a production system, you'd typically stream alerts from S3, SQS, or another event source.
     if not os.path.exists(ALERT_FILE):
         logger.error(f"Alert file '{ALERT_FILE}' not found. No alerts will be processed.")
@@ -53,7 +52,7 @@ def lambda_handler(event, context):
                     "ReceivedAt": datetime.datetime.now().isoformat()
                 }
 
-                # 🧠 Step 1: Enrich the alert using Bedrock (AI summarization, classification, and action guidance)
+                # Step 1: Enrich the alert using Bedrock (AI summarization, classification, and action guidance)
                 # This prompt guides the AI to provide structured JSON output for decision-making.
                 bedrock_prompt_template = """
 You are an expert security analyst assistant. Your task is to analyze security alerts, summarize them, classify their nature (real threat vs. false positive), determine if they are addressable by an AI agent or require human intervention, and suggest appropriate actions.
@@ -205,9 +204,29 @@ Example for a false positive:
                     # ---------------------
 
                     # Extract the JSON string from the nested structure
-                    text_content = bedrock_output["output"]["message"]["content"][0]["text"]
-                    # Parse the string into a dictionary
-                    parsed_content = json.loads(text_content)
+                    # This part needs to be adjusted based on the actual structure of `bedrock_output`
+                    # for the specific model being used. The original code's extraction might be too specific.
+                    # Assuming for now that `bedrock_output` directly contains the parsed JSON from the prompt.
+                    # If models like Nova Lite return a different structure, this will need refinement.
+                    
+                    # A more robust way to get the content, considering different model outputs:
+                    parsed_content = {}
+                    if "completion" in bedrock_output: # For older Claude models
+                        parsed_content = json.loads(bedrock_output["completion"])
+                    elif "content" in bedrock_output and isinstance(bedrock_output["content"], list): # For Claude 3
+                        # Assuming the first content block is the text output
+                        text_content = bedrock_output["content"][0].get("text", "")
+                        parsed_content = json.loads(text_content)
+                    elif "results" in bedrock_output and isinstance(bedrock_output["results"], list): # For Titan Text
+                        text_content = bedrock_output["results"][0].get("outputText", "")
+                        parsed_content = json.loads(text_content)
+                    elif "messages" in bedrock_output and isinstance(bedrock_output["messages"], list): # For Nova Lite
+                        # Assuming the first message's content is the text output
+                        text_content = bedrock_output["messages"][0].get("content", [{}])[0].get("text", "")
+                        parsed_content = json.loads(text_content)
+                    else:
+                        # Fallback if none of the above match, assume bedrock_output *is* the parsed JSON
+                        parsed_content = bedrock_output
 
 
                     # Extract the classified information, providing sensible defaults
@@ -237,16 +256,16 @@ Example for a false positive:
                     "Source": alert["Source"],
                     "Message": alert["Message"],
                     "AISummary": ai_summary,
-                    "IsRealThreat": is_real_threat,              # NEW: AI's determination
-                    "ActionType": action_type,                   # NEW: AI's suggested action
-                    "AIHandlingMessage": ai_handling_message,    # NEW: AI's handling message
-                    "HumanGuidanceMessage": human_guidance_message, # NEW: AI's human guidance
+                    "IsRealThreat": is_real_threat,              # AI's determination
+                    "ActionType": action_type,                   # AI's suggested action
+                    "AIHandlingMessage": ai_handling_message,    # AI's handling message
+                    "HumanGuidanceMessage": human_guidance_message, # AI's human guidance
                     # 🏷️ Step 4: Add useful tags / tracking attributes
                     "Status": "Open", # Could be updated to "Resolved" if AI_HANDLED
                     "ProcessedBy": "UASO_Lambda",
                     "Environment": os.environ.get("ENV", "Hackathon"),
 
-                    # 🤖 Step 5: Store AI model metadata
+                    # Step 5: Store AI model metadata
                     "ModelUsed": inference_metadata.get("model", "unknown"),
                     "InferenceTimestamp": inference_metadata.get("timestamp"),
                     "Metadata": json.dumps(inference_metadata) # Store as JSON string for full context
