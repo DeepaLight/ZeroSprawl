@@ -11,10 +11,9 @@ logger.setLevel(logging.INFO)
 # Environment variables for your AWS resources
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 DYNAMO_TABLE_NAME = os.environ.get("DDB_TABLE")
-# Default to a capable Claude 3 model for complex reasoning and JSON output
 # IMPORTANT: The actual model used will be determined by the BEDROCK_MODEL_ID environment variable
-# if it's set. Otherwise, it defaults to Claude 3 Sonnet.
-MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+# if it's set. Otherwise, it defaults to Amazon Nova Lite.
+MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0")
 REGION = os.environ.get("REGION", "us-east-2")
 
 # Initialize AWS clients
@@ -23,83 +22,39 @@ sns = boto3.client('sns')
 bedrock = boto3.client('bedrock-runtime', region_name=REGION)
 
 def lambda_handler(event, context):
-    # Lambda entry point for the Agentic Security AI prototype.
-    # Reads alerts from a sample file, uses Bedrock LLM for triage, stores results in DynamoDB, and notifies via SNS.
-    # Returns a summary of actions taken. Handles errors gracefully and logs summary metrics for demo impact.
+    # Log the MODEL_ID being used for debugging. This will appear in your Lambda logs.
     logger.info(f"Using Bedrock Model ID: {MODEL_ID}")
 
     ALERT_FILE = "alerts_sample.txt"
 
-    # Metrics for summary table
-    metrics = {
-        "AI_HANDLED": 0,
-        "HUMAN_REQUIRED": 0,
-        "FALSE_POSITIVE": 0,
-        "NON_ADDRESSABLE": 0,
-        "UNKNOWN": 0,
-        "ERROR_BEDROCK_FAILED": 0,
-        "total": 0
-    }
-
-    processed_alerts_summary = []  # To collect results for the final response
-
-    try:
-        if not os.path.exists(ALERT_FILE):
-            logger.error(f"Alert file '{ALERT_FILE}' not found. No alerts will be processed.")
-            return {
-                "statusCode": 404,
-                "body": json.dumps({"message": f"Alert file '{ALERT_FILE}' not found. Please ensure it's in the deployment package."})
-            }
-
-        with open(ALERT_FILE, "r") as f:
-            for line in f:
-                try:
-                    alert_data = json.loads(line.strip())
-
-                    # Create a more unique AlertID using microseconds
-                    alert = {
-                        "AlertID": "ALERT-" + datetime.datetime.now().strftime("%Y%m%d%H%M%S%f"),
-                        "Severity": alert_data.get("Severity", "Low"),
-                        "Source": alert_data.get("Source", "Unknown"),
-                        "Message": alert_data.get("Message", ""),
-                        "ReceivedAt": datetime.datetime.now().isoformat()
-                    }
-
-                    # ...existing code...
-
-                    # Update metrics
-                    metrics[action_type] = metrics.get(action_type, 0) + 1
-                    metrics["total"] += 1
-
-                except json.JSONDecodeError as e:
-                    logger.error(f"Skipping malformed JSON line in '{ALERT_FILE}': {line.strip()} - Error: {e}")
-                except Exception as e:
-                    logger.error(f"An unexpected error occurred while processing a line from '{ALERT_FILE}': {line.strip()} - Error: {e}")
-
-        # Log a summary table of actions for demo impact
-        logger.info("\n==== Security Agent Summary Table ====")
-        logger.info(json.dumps(metrics, indent=2))
-        logger.info("======================================\n")
-
+    # Important: In a Lambda environment, 'alerts_sample.txt' needs to be part of your deployment package.
+    # For a production system, you'd typically stream alerts from S3, SQS, or another event source.
+    if not os.path.exists(ALERT_FILE):
+        logger.error(f"Alert file '{ALERT_FILE}' not found. No alerts will be processed.")
         return {
-            "statusCode": 200,
-            "body": json.dumps({
-                "message": f"Successfully processed {metrics['total']} alerts from '{ALERT_FILE}'.",
-                "processed_alerts": processed_alerts_summary,
-                "summary_metrics": metrics
-            })
+            "statusCode": 404,
+            "body": json.dumps({"message": f"Alert file '{ALERT_FILE}' not found. Please ensure it's in the deployment package."})
         }
 
-    except Exception as e:
-        # Catch-all error handler for Lambda entry point
-        logger.error(f"Fatal error in lambda_handler: {e}")
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "message": "Fatal error occurred in Security Agent Lambda. See logs for details.",
-                "error": str(e)
-            })
-        }
+    processed_alerts_summary = [] # To collect results for the final response
+
+    with open(ALERT_FILE, "r") as f:
+        for line in f:
+            try:
+                alert_data = json.loads(line.strip())
+
+                # Create a more unique AlertID using microseconds
+                alert = {
+                    "AlertID": "ALERT-" + datetime.datetime.now().strftime("%Y%m%d%H%M%S%f"),
+                    "Severity": alert_data.get("Severity", "Low"),
+                    "Source": alert_data.get("Source", "Unknown"),
+                    "Message": alert_data.get("Message", ""),
+                    "ReceivedAt": datetime.datetime.now().isoformat()
+                }
+
+                # Step 1: Enrich the alert using Bedrock (AI summarization, classification, and action guidance)
+                # This prompt guides the AI to provide structured JSON output for decision-making.
+                bedrock_prompt_template = """
 You are an expert security analyst assistant. Your task is to analyze security alerts, summarize them, classify their nature (real threat vs. false positive), determine if they are addressable by an AI agent or require human intervention, and suggest appropriate actions.
 
 Analyze the following security alert:
@@ -159,7 +114,7 @@ Example for a false positive:
                         ],
                         "max_tokens": 500,
                         "temperature": 0.2,
-                        "top_p": 0.9 # This is correct for Claude 3 models
+                        "top_p": 0.9
                     }
                 elif MODEL_ID.startswith("anthropic.claude-v2") or MODEL_ID.startswith("anthropic.claude-instant"):
                     # Older Claude models (v2, Instant) use a 'prompt' string and 'max_tokens_to_sample'.
@@ -167,7 +122,7 @@ Example for a false positive:
                         "prompt": f"\n\nHuman: {prompt_text}\n\nAssistant:",
                         "max_tokens_to_sample": 500,
                         "temperature": 0.2,
-                        "top_p": 0.9 # This is correct for older Claude models
+                        "top_p": 0.9
                     }
                 elif MODEL_ID.startswith("amazon.titan-text"):
                     # Amazon Titan Text models use 'inputText' and 'textGenerationConfig'.
@@ -176,13 +131,13 @@ Example for a false positive:
                         "textGenerationConfig": {
                             "maxTokenCount": 500,
                             "temperature": 0.2,
-                            "topP": 0.9 # Note the capital 'P' for Titan models
+                            "topP": 0.9
                         }
                     }
                 elif MODEL_ID.startswith("us.amazon.nova-lite"):
                     bedrock_body = {
                         "messages": [
-                            {"role": "user", "content": [{"text": prompt_text}]} # Corrected 'prompt' to 'prompt_text'
+                            {"role": "user", "content": [{"text": prompt_text}]}
                         ],
                         "inferenceConfig": {
                             "maxTokens": 150,
@@ -192,16 +147,15 @@ Example for a false positive:
                     }
                 else:
                     # Fallback for unknown models. This might still fail, but provides a starting point.
-                    # If you encounter issues with a specific model, you'll need to add a dedicated branch above.
-                    logger.warning(f"Unknown Bedrock Model ID prefix '{MODEL_ID}'. Attempting to use a generic 'inferenceConfig' structure based on your original code.")
+                    logger.warning(f"Unknown Bedrock Model ID prefix '{MODEL_ID}'. Attempting to use a generic 'messages' structure.")
                     bedrock_body = {
-                        "messages": [ # Assuming it's a chat-like model, as in your original code
+                        "messages": [
                             {"role": "user", "content": [{"type": "text", "text": prompt_text}]}
                         ],
-                        "inferenceConfig": { # As seen in your original code
+                        "inferenceConfig": {
                             "maxTokens": 500,
                             "temperature": 0.2,
-                            "topP": 0.9 # Using capital 'P' as in your original code
+                            "topP": 0.9
                         }
                     }
                 # --- End Dynamic Bedrock Body Construction ---
@@ -213,46 +167,47 @@ Example for a false positive:
                 ai_handling_message = ""
                 human_guidance_message = ""
                 inference_metadata = {"error": "Bedrock inference not attempted or failed"}
+                
+                raw_bedrock_response = "" # Initialize to store raw response for logging/debugging
 
                 try:
                     response = bedrock.invoke_model(
                         modelId=MODEL_ID,
                         contentType="application/json",
                         accept="application/json",
-                        body=json.dumps(bedrock_body).encode('utf-8') # Encode the dynamically created body
+                        body=json.dumps(bedrock_body).encode('utf-8')
                     )
 
-                    result_raw = response['body'].read().decode('utf-8')
-                    
-                    # Attempt to parse the JSON output from Bedrock.
-                    # Claude models sometimes wrap JSON in markdown blocks (```json ... ```).
-                    # This logic tries to extract the pure JSON string.
-                    bedrock_output = {}
-                    if result_raw.strip().startswith('{') and result_raw.strip().endswith('}'):
-                        bedrock_output = json.loads(result_raw)
+                    raw_bedrock_response = response['body'].read().decode('utf-8')
+                    logger.info(f"Raw Bedrock response for AlertID {alert['AlertID']}: {raw_bedrock_response}")
+
+                    # --- Dynamic Bedrock Response Parsing based on MODEL_ID ---
+                    # This extracts the actual JSON string generated by the LLM from the model's specific output structure.
+                    extracted_llm_json_string = ""
+                    bedrock_response_parsed = json.loads(raw_bedrock_response)
+
+                    if MODEL_ID.startswith("anthropic.claude-3"):
+                        extracted_llm_json_string = bedrock_response_parsed["content"][0]["text"]
+                    elif MODEL_ID.startswith("anthropic.claude-v2") or MODEL_ID.startswith("anthropic.claude-instant"):
+                        extracted_llm_json_string = bedrock_response_parsed["completion"]
+                    elif MODEL_ID.startswith("amazon.titan-text"):
+                        extracted_llm_json_string = bedrock_response_parsed["results"][0]["outputText"]
+                    elif MODEL_ID.startswith("us.amazon.nova-lite"):
+                        extracted_llm_json_string = bedrock_response_parsed["output"]["message"]["content"][0]["text"]
                     else:
-                        try:
-                            # Find the first and last curly brace to extract the JSON string
-                            json_start = result_raw.find('{')
-                            json_end = result_raw.rfind('}')
-                            if json_start != -1 and json_end != -1 and json_end > json_start:
-                                json_str = result_raw[json_start : json_end + 1]
-                                bedrock_output = json.loads(json_str)
-                            else:
-                                raise ValueError("No valid JSON object found in Bedrock response.")
-                        except (json.JSONDecodeError, ValueError) as json_e:
-                            logger.error(f"Failed to extract or parse JSON from Bedrock response for AlertID {alert['AlertID']}: {json_e}. Raw response: {result_raw}")
-                            # Fallback to empty dict if parsing fails, so .get() calls don't error
-                    
-                    # --- ADD THIS LINE ---
-                    logger.info(f"Bedrock output for AlertID {alert['AlertID']}: {json.dumps(bedrock_output, indent=2)}")
-                    # ---------------------
+                        logger.warning(f"Unknown Bedrock Model ID prefix '{MODEL_ID}'. Attempting generic JSON extraction from raw response.")
+                        # Fallback: Try to find a JSON string within the raw response (e.g., if wrapped in markdown)
+                        json_start = raw_bedrock_response.find('{')
+                        json_end = raw_bedrock_response.rfind('}')
+                        if json_start != -1 and json_end != -1 and json_end > json_start:
+                            extracted_llm_json_string = raw_bedrock_response[json_start : json_end + 1]
+                        else:
+                            raise ValueError(f"Could not find a valid JSON object in the raw response for model {MODEL_ID}.")
 
-                    # Extract the JSON string from the nested structure
-                    text_content = bedrock_output["output"]["message"]["content"][0]["text"]
-                    # Parse the string into a dictionary
-                    parsed_content = json.loads(text_content)
+                    # Now, parse the extracted JSON string into the final dictionary
+                    parsed_content = json.loads(extracted_llm_json_string)
 
+                    logger.info(f"Bedrock AI analysis (parsed_content) for AlertID {alert['AlertID']}: {json.dumps(parsed_content, indent=2)}")
 
                     # Extract the classified information, providing sensible defaults
                     ai_summary = parsed_content.get('summary', 'No AI summary generated.')
@@ -265,12 +220,17 @@ Example for a false positive:
                     inference_metadata = {
                         "model": MODEL_ID,
                         "timestamp": datetime.datetime.now().isoformat(),
-                        "raw_bedrock_response": result_raw # Store raw response for debugging
+                        "raw_bedrock_response": raw_bedrock_response # Store raw response for debugging
                     }
 
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    logger.error(f"Bedrock analysis failed for AlertID {alert['AlertID']} due to parsing error: {e}. Raw response: {raw_bedrock_response}")
+                    inference_metadata = {"error": str(e), "raw_response": raw_bedrock_response}
+                    # Default values for ai_summary, is_real_threat, action_type etc. will remain
                 except Exception as e:
-                    logger.error(f"Bedrock analysis failed for AlertID {alert['AlertID']}: {e}")
-                    inference_metadata = {"error": str(e)}
+                    logger.error(f"An unexpected error occurred during Bedrock analysis for AlertID {alert['AlertID']}: {e}")
+                    inference_metadata = {"error": str(e), "raw_response": raw_bedrock_response}
+
 
                 # 🗄 Step 2: Store alert and AI analysis in DynamoDB
                 table = dynamodb.Table(DYNAMO_TABLE_NAME)
@@ -281,16 +241,16 @@ Example for a false positive:
                     "Source": alert["Source"],
                     "Message": alert["Message"],
                     "AISummary": ai_summary,
-                    "IsRealThreat": is_real_threat,              # NEW: AI's determination
-                    "ActionType": action_type,                   # NEW: AI's suggested action
-                    "AIHandlingMessage": ai_handling_message,    # NEW: AI's handling message
-                    "HumanGuidanceMessage": human_guidance_message, # NEW: AI's human guidance
+                    "IsRealThreat": is_real_threat,              # AI's determination
+                    "ActionType": action_type,                   # AI's suggested action
+                    "AIHandlingMessage": ai_handling_message,    # AI's handling message
+                    "HumanGuidanceMessage": human_guidance_message, # AI's human guidance
                     # 🏷️ Step 4: Add useful tags / tracking attributes
                     "Status": "Open", # Could be updated to "Resolved" if AI_HANDLED
                     "ProcessedBy": "UASO_Lambda",
                     "Environment": os.environ.get("ENV", "Hackathon"),
 
-                    # 🤖 Step 5: Store AI model metadata
+                    # Step 5: Store AI model metadata
                     "ModelUsed": inference_metadata.get("model", "unknown"),
                     "InferenceTimestamp": inference_metadata.get("timestamp"),
                     "Metadata": json.dumps(inference_metadata) # Store as JSON string for full context
