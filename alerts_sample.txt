@@ -1,0 +1,25 @@
+{"Severity": "Medium", "Source": "Endpoint", "Message": "Multiple failed login attempts for service account 'svc_backup', automatically locked and IP blocked."}
+{"Severity": "Low", "Source": "Network", "Message": "DDoS attack detected on non-critical public endpoint, traffic automatically rerouted and mitigated by WAF."}
+{"Severity": "Medium", "Source": "CloudTrail", "Message": "Unauthorized S3 bucket policy change attempt by IAM role 'temp_dev', automatically reverted to last known good configuration."}
+{"Severity": "Low", "Source": "Vulnerability Scanner", "Message": "Outdated software version (Apache Struts 2.x) detected on non-production web server, automated patch deployment initiated."}
+{"Severity": "High", "Source": "Firewall", "Message": "Brute-force SSH attempt on exposed bastion host from blacklisted IP, IP automatically added to deny list and connection dropped."}
+{"Severity": "Critical", "Source": "Endpoint", "Message": "Ransomware detected and active on critical production database server. Immediate manual isolation and forensic investigation required."}
+{"Severity": "High", "Source": "CloudTrail", "Message": "IAM user 'admin_jdoe' logged in from an unusual country (China) at 3 AM local time. Requires immediate human verification and potential account suspension."}
+{"Severity": "High", "Source": "DLP", "Message": "Large volume of sensitive customer data (PII) detected attempting to egress to an unapproved external storage service. Requires human review and incident response."}
+{"Severity": "Critical", "Source": "Network", "Message": "Zero-day exploit attempt detected targeting core network infrastructure. Requires immediate human analysis, threat hunting, and emergency patching if available."}
+{"Severity": "Medium", "Source": "Security Hub", "Message": "New critical finding: Publicly accessible EC2 instance with an open port 22, no associated security group rules. Requires human review to determine necessity and appropriate action."}
+{"Severity": "Low", "Source": "IDS", "Message": "Port scan detected from internal network, confirmed as routine vulnerability assessment by IT team."}
+{"Severity": "Medium", "Source": "Endpoint", "Message": "Antivirus detected generic malware signature on user's workstation, identified as a false positive after hash lookup against known good files."}
+{"Severity": "Low", "Source": "Network", "Message": "High volume of outbound traffic to a known streaming service from guest Wi-Fi, identified as expected user behavior."}
+{"Severity": "Medium", "Source": "CloudTrail", "Message": "Multiple 'DescribeInstances' API calls from a newly created IAM role, confirmed as part of a legitimate new monitoring tool deployment."}
+{"Severity": "Low", "Source": "Firewall", "Message": "Blocked connection from blacklisted IP address, but IP is frequently re-assigned by cloud providers and belongs to a legitimate partner service."}
+{"Severity": "High", "Source": "External Threat Intel", "Message": "Critical vulnerability (CVE-2024-XXXX) announced for a third-party software library used in production, patch not yet released by vendor. Requires manual risk assessment and mitigation planning."}
+{"Severity": "Medium", "Source": "Compliance Scan", "Message": "PCI DSS compliance violation: Unencrypted S3 bucket found containing payment card data. Requires manual remediation as automated encryption might break dependent applications."}
+{"Severity": "High", "Source": "Physical Security", "Message": "Unauthorized access attempt detected at data center perimeter fence. Requires dispatch of security personnel and manual investigation."}
+{"Severity": "Low", "Source": "Vendor API", "Message": "API rate limit exceeded for a critical external vendor service, causing service degradation. Requires manual contact with vendor support and potential plan upgrade."}
+{"Severity": "Medium", "Source": "CloudTrail", "Message": "Unusual API call pattern from a production application role to a non-production region. No immediate threat, but requires manual investigation of application configuration."}
+{"Severity": "Medium", "Source": "Network", "Message": "Unusual outbound traffic pattern to an unknown IP address range, no clear threat signature identified."}
+{"Severity": "High", "Source": "Endpoint", "Message": "Cryptic process injection detected in memory, but no known malware signature match. Requires deeper analysis to determine intent."}
+{"Severity": "Low", "Source": "Log Aggregator", "Message": "Spike in 'ERROR' level logs from a new microservice, root cause unclear without further context or application knowledge."}
+{"Severity": "Medium", "Source": "CloudTrail", "Message": "Infrequent 'AssumeRole' activity for a cross-account role, details are too vague to classify as benign or malicious without additional data."}
+{"Severity": "High", "Source": "Threat Intelligence Feed", "Message": "New, highly sophisticated malware campaign targeting similar industries detected, specific IOCs not yet fully disseminated."}
