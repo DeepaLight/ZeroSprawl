@@ -150,6 +150,14 @@ Despite the tight timeframe, the team achieved:
 - **Hands-free security handling** via AWS Bedrock & Lambda
 - A scalable foundation for enterprise-ready automation
 
+- | **Before UASO**    | **After UASO (Prototype)** |
+| ------------------ | -------------------------- |
+| Manual log reviews | Automated agent analysis   |
+| High alert noise   | Risk-based filtering       |
+| No action linkage  | Autonomous response        |
+| Time-consuming     | Instant triage             |
+
+
 ---
 
 ## 🏁 Why This Matters
